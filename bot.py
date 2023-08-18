@@ -80,18 +80,8 @@ class Bot(discord.Client):
                         url = "https://api.mage.space/api/v3/images/generate",
                         headers = {
                             "accept": "application/json",
-                            "accept-language": "en-US,en;q=0.9",
                             "authorization": f"{content['token_type']} {content['access_token']}",
-                            "cache-control": "no-cache",
                             "content-type": "application/json",
-                            "pragma": "no-cache",
-                            "sec-ch-ua": "\"Not.A/Brand\";v=\"8\", \"Chromium\";v=\"114\", \"Google Chrome\";v=\"114\"",
-                            "sec-ch-ua-mobile": "?0",
-                            "sec-ch-ua-platform": "\"Linux\"",
-                            "sec-fetch-dest": "empty",
-                            "sec-fetch-mode": "cors",
-                            "sec-fetch-site": "same-site",
-                            "x-fjs-id": "5c0697a0c606ed84b53c310c7acb1a6b"
                         },
                         data = json.dumps({
                             "model": "sdxl",
