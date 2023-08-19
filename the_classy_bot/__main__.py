@@ -36,16 +36,14 @@ ImagineStepsNumber: Final = app_commands.transformers.RangeTransformer(
 
 class Bot(commands.Bot):
     class Cog(commands.Cog):
-        default_imagine_aspect_ratio: Final[ImagineAspectRatio] = "3:2"
-        default_imagine_steps: Final = 30
-        math_quiz_timeout: Final = 300
-
         @app_commands.command(
             description = "Hello!"
         )
         async def hello(self, interaction: discord.Interaction) -> None:
             await interaction.response.send_message('Hello')
 
+        default_imagine_aspect_ratio: Final[ImagineAspectRatio] = "3:2"
+        default_imagine_steps: Final = 30
         @app_commands.command(
             description = "Turns your prompts into art"
         )
@@ -141,21 +139,15 @@ class Bot(commands.Bot):
                 await interaction.followup.send(f"**Something went wrong**")
                 raise exception
 
+        math_quiz_timeout: Final = 300.0
         @app_commands.command(
             description = "Solve a short math question"
         )
         async def math_quiz(self, interaction: discord.Interaction) -> None:
-            with open(os.path.join(file_path, "../data/math_qa_5k.json"), "rb") as f:
+            with open(os.path.join(file_path, "../data/math_qa.json")) as f:
                 quizzes = json.load(f)
                 quiz = random.choice(quizzes)
                 del quizzes
-
-            try:
-                options = json.loads(quiz['options'].replace("'", '"'))
-            except json.JSONDecodeError:
-                options = str(quiz['options']).split(" , ")
-
-            options = [option.capitalize().split(" ) ") for option in options]
 
             embed = discord.Embed(
                 title = f"Math Quiz (category: {quiz['category']})",
@@ -164,14 +156,14 @@ class Bot(commands.Bot):
 
             embed.add_field(
                 name = "**Problem**",
-                value = quiz['Problem'],
+                value = quiz['problem'],
                 inline = False
             ) 
             embed.add_field(
                 name = "**Options**",
                 value = "\n".join(
                     f'**{option}) ** {label}'
-                        for option, label in options
+                        for option, label in quiz["options"]
                 ),
                 inline = False
             )
@@ -194,7 +186,7 @@ class Bot(commands.Bot):
                     bisect.insort(
                         scoreboard,
                         (
-                            self.label != quiz["correct"].upper(),
+                            self.custom_id != quiz["correct"],
                             time_taken,
                             button_interaction.user
                         )
@@ -203,7 +195,7 @@ class Bot(commands.Bot):
                     scoreboard_content = []
                     for index, (failure, time_taken, user) in enumerate(scoreboard, 1):
                         minutes_taken = int(time_taken.total_seconds() / 60)
-                        formatted_time_taken = f"{minutes_taken:02d}:{time_taken.seconds:02d}"
+                        formatted_time_taken = f"{minutes_taken:02d}:{time_taken.seconds % 60:02d}"
                         scoreboard_content.append(
                             f"**{[index,'_'][failure]}) {user.mention} {formatted_time_taken} {'✅❌'[failure]}**"
                         )
@@ -215,8 +207,8 @@ class Bot(commands.Bot):
 
             view = discord.ui.View(timeout = self.math_quiz_timeout)
 
-            for option, _ in options:
-                button = OptionButton(label = option)
+            for option, _ in quiz["options"]:
+                button = OptionButton(label = option, custom_id = option)
                 view.add_item(button)
             
             await interaction.response.send_message(embed = embed, view = view)
@@ -224,6 +216,11 @@ class Bot(commands.Bot):
             async def view_on_timeout():
                 assert embed.title is not None
                 embed.title += " **\\*ENDED\\***"
+                embed.add_field(
+                    name = "**Rationale**",
+                    value = quiz["rationale"],
+                    inline = False
+                )
                 await interaction.edit_original_response(embed = embed, view = None)
                 
             view.on_timeout = view_on_timeout
