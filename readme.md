@@ -1,13 +1,13 @@
 # The Classy Discord Bot
 
 ### How to use:
- - Create a `.env` file similar to `example.env`
+ - Create a `dotenv/.env` file similar to `dotenv/example.env`
  - Change `DISCORD_TOKEN` to your discord token
 
 ### How to enable the imagine command:
 - Create a [mage.space](https://mage.space) account
 - Run the script below in your browser's developer console to get the refresh token
-- Put the refresh token in `MAGE_REFRESH_TOKEN` in `.env`
+- Put the refresh token in `MAGE_REFRESH_TOKEN` in `dotenv/.env`
 
 ```javascript
 indexedDB.open("firebaseLocalStorageDb").onsuccess = (event) => {
