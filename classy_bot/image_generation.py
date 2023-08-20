@@ -75,7 +75,7 @@ class ImageGenerator:
                     "negative_prompt": negative_prompt,
                     "clip_skip": False,
                     "num_inference_steps": num_steps,
-                    "guidance_scale": 12.5,
+                    "guidance_scale": 10,
                     "aspect_ratio": float_aspect_ratio,
                     "scheduler": "euler",
                     "scheduler_use_karras": False,
@@ -84,7 +84,7 @@ class ImageGenerator:
                     "image_guidance_scale": 1.5,
                     "refiner_strength": 0.2,
                     "use_refiner": True,
-                    "easy_mode": False,
+                    "easy_mode": True,
                     "is_public": True
                 })
             )

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from discord.emoji import Emoji
+from discord.enums import ButtonStyle
+from discord.interactions import Interaction
+from discord.partial_emoji import PartialEmoji
+
 __all__ = ("ImagineStepsNumber", "Bot")
 
 import os
@@ -7,7 +12,7 @@ import json
 import random
 import bisect
 import datetime
-from typing import Final
+from typing import Any, Final, Optional, Union
 
 import dotenv
 import discord
@@ -15,6 +20,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from . import utils
+from .quiz import QuizView
 from .image_generation import ImageGenerator, AspectRatio
 
 dotenv.load_dotenv(utils.resolve_relative_path(__file__, "../dotenv/.env"))
@@ -59,7 +65,6 @@ class Cog(commands.Cog):
         
         await interaction.response.defer(thinking = True)
 
-        
         try:
             image = await self.image_generator.generate(
                 prompt = prompt,
@@ -92,84 +97,14 @@ class Cog(commands.Cog):
         with open(utils.resolve_relative_path(__file__, "../data/math_qa.json")) as f:
             quizzes = json.load(f)
 
-        await self.quiz(interaction, quiz = random.choice(quizzes))  
+        quiz = random.choice(quizzes)
+        del quizzes
 
-    async def quiz(self, interaction: discord.Interaction, quiz, quiz_timeout: float = 300.0) -> None:
-        embed = discord.Embed(
-            title = f"Math Quiz (category: {quiz['category']})",
-            color = discord.Color.blue()
-        )
+        await QuizView(
+            interaction = interaction,
+            quiz = quiz
+        ).send()
 
-        embed.add_field(
-            name = "**Problem**",
-            value = quiz['problem'],
-            inline = False
-        ) 
-        embed.add_field(
-            name = "**Options**",
-            value = "\n".join(
-                f'**{option}) ** {label}'
-                    for option, label in quiz["options"]
-            ),
-            inline = False
-        )
-
-        scoreboard: list[tuple[bool, datetime.timedelta, discord.User | discord.Member]] = []
-        users_submitted: set[discord.User | discord.Member] = set()
-
-        class OptionButton(discord.ui.Button):
-            async def callback(self, button_interaction: discord.Interaction) -> None:
-                assert button_interaction.message is not None
-                
-                time_taken = button_interaction.created_at - button_interaction.message.created_at
-
-                if button_interaction.user in users_submitted:
-                    await button_interaction.response.defer()
-                    return
-                
-                users_submitted.add(button_interaction.user)
-
-                bisect.insort(
-                    scoreboard,
-                    (
-                        self.custom_id != quiz["correct"],
-                        time_taken,
-                        button_interaction.user
-                    )
-                )
-
-                scoreboard_content = []
-                for index, (failure, time_taken, user) in enumerate(scoreboard, 1):
-                    minutes_taken = int(time_taken.total_seconds() / 60)
-                    formatted_time_taken = f"{minutes_taken:02d}:{time_taken.seconds % 60:02d}"
-                    scoreboard_content.append(
-                        f"**{[index,'_'][failure]}) {user.mention} {formatted_time_taken} {'✅❌'[failure]}**"
-                    )
-
-                embed.description = "\n".join(scoreboard_content)
-
-                await button_interaction.message.edit(embed = embed)
-                await button_interaction.response.defer()
-
-        view = discord.ui.View(timeout = quiz_timeout)
-
-        for option, _ in quiz["options"]:
-            button = OptionButton(label = option, custom_id = option)
-            view.add_item(button)
-        
-        await interaction.response.send_message(embed = embed, view = view)
-
-        async def view_on_timeout():
-            assert embed.title is not None
-            embed.title += " **\\*ENDED\\***"
-            embed.add_field(
-                name = "**Rationale**",
-                value = quiz["rationale"],
-                inline = False
-            )
-            await interaction.edit_original_response(embed = embed, view = None)
-            
-        view.on_timeout = view_on_timeout
 
 class Bot(commands.Bot):
     async def on_ready(self):
