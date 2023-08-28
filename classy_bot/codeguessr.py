@@ -46,7 +46,7 @@ class View(discord.ui.View):
 
         n_choices = 5
 
-        options = random.choices(langs, k=n_choices)
+        options = random.sample(langs, k=n_choices)
         if answer.language in options:
             i = options.index(answer.language)
         else:
