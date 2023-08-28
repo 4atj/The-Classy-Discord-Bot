@@ -1,18 +1,11 @@
 from __future__ import annotations
 
-from discord.emoji import Emoji
-from discord.enums import ButtonStyle
-from discord.interactions import Interaction
-from discord.partial_emoji import PartialEmoji
-
 __all__ = ("ImagineStepsNumber", "Bot")
 
 import os
 import json
 import random
-import bisect
-import datetime
-from typing import Any, Final, Optional, Union
+from typing import Final
 
 import dotenv
 import discord
@@ -20,17 +13,16 @@ from discord import app_commands
 from discord.ext import commands
 
 from . import utils
-from .quiz import QuizView
+from .quiz import QuizView, Quiz
 from .image_generation import ImageGenerator, AspectRatio
 from . import codeguessr
 
 dotenv.load_dotenv(utils.resolve_relative_path(__file__, "../dotenv/.env"))
 
-
 ImagineStepsNumber: Final = app_commands.transformers.RangeTransformer(
     discord.enums.AppCommandOptionType.integer,
-    min = 10,
-    max = 100
+    min=10,
+    max=100
 )
 
 class Cog(commands.Cog):
@@ -101,9 +93,24 @@ class Cog(commands.Cog):
         quiz = random.choice(quizzes)
         del quizzes
 
+        _, options = zip(*quiz["options"])
+        answer = options[ord(quiz["correct"])-ord("A")]
+
+        quiz = Quiz(
+            title="Math Quiz",
+            prompt_header="Problem",
+            prompt_body=quiz["problem"],
+            answer_header="Rationale",
+            answer_body=quiz["rationale"],
+            options=options,
+            answer=answer
+        )
+
         await QuizView(
-            interaction = interaction,
-            quiz = quiz
+            interaction=interaction,
+            quiz=quiz,
+            color=discord.Color.blue(),
+            timeout=240
         ).send()
 
     @app_commands.command(
@@ -113,12 +120,12 @@ class Cog(commands.Cog):
         db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr.db")
         db_uri = f"file:{db_rel_path}?mode=ro"
 
-        await codeguessr.View(
-            interaction = interaction,
-            answer = codeguessr.random_solution_from_db(db_uri),
-            langs = codeguessr.langs_from_db(db_uri)
+        await QuizView(
+            interaction=interaction,
+            quiz=codeguessr.random_quiz_from_db(db_uri, n_choices = 5),
+            color=discord.Color.dark_grey(),
+            timeout=20
         ).send()
-
 
 
 class Bot(commands.Bot):
@@ -132,5 +139,5 @@ if __name__ == "__main__":
     intents = discord.Intents.default()
     intents.message_content = True
 
-    bot = Bot(command_prefix = "\0", intents = intents)
+    bot = Bot(command_prefix="\0", intents=intents)
     bot.run(os.environ['DISCORD_TOKEN'])
