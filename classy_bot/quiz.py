@@ -125,6 +125,10 @@ class QuizView(discord.ui.View):
         message = interaction.message
         assert message is not None
 
+        if self.embed.has_submitted(interaction.user):
+            await interaction.response.send_message(content="**You have already submitted an answer**", ephemeral=True)
+            return
+
         submission = Submission(
             user=interaction.user,
             answer=button.label or "",

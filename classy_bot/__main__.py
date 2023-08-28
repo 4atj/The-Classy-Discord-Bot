@@ -135,7 +135,6 @@ class Bot(commands.Bot):
 
 
 if __name__ == "__main__":
-    
     intents = discord.Intents.default()
     intents.message_content = True
 
