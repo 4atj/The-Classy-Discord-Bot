@@ -22,6 +22,7 @@ from discord.ext import commands
 from . import utils
 from .quiz import QuizView
 from .image_generation import ImageGenerator, AspectRatio
+from . import codeguessr
 
 dotenv.load_dotenv(utils.resolve_relative_path(__file__, "../dotenv/.env"))
 
@@ -104,6 +105,20 @@ class Cog(commands.Cog):
             interaction = interaction,
             quiz = quiz
         ).send()
+
+    @app_commands.command(
+        description = "Guess the programming language"
+    )
+    async def codeguessr(self, interaction: discord.Interaction) -> None:
+        db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr.db")
+        db_uri = f"file:{db_rel_path}?mode=ro"
+
+        await codeguessr.View(
+            interaction = interaction,
+            answer = codeguessr.random_solution_from_db(db_uri),
+            langs = codeguessr.langs_from_db(db_uri)
+        ).send()
+
 
 
 class Bot(commands.Bot):
