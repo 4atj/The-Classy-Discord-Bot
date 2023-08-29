@@ -2,92 +2,145 @@ from __future__ import annotations
 
 import bisect
 import datetime
-from typing import Any, Optional, Union
+from dataclasses import dataclass
 
 import discord
-from discord.emoji import Emoji
-from discord.enums import ButtonStyle
 from discord.interactions import Interaction
-from discord.partial_emoji import PartialEmoji
+
+
+@dataclass(kw_only=True)
+class Submission:
+    user: discord.User | discord.Member
+    answer: str
+    success: bool
+    time_taken: datetime.timedelta
+
+    def __lt__(self, other: Submission) -> bool:
+        return (self.success, -self.time_taken) < (other.success, -other.time_taken)
+
+
+@dataclass(kw_only=True)
+class Quiz:
+    title: str
+    prompt_header: str
+    prompt_body: str
+    answer_header: str
+    answer_body: str
+    options: tuple[str, ...]
+    answer: str
+
+
+class QuizEmbed(discord.Embed):
+    def __init__(
+        self, 
+        *,
+        quiz: Quiz,
+        color: discord.Color | int | None = None
+    ) -> None:
+        super().__init__(
+            title=quiz.title,
+            color=color
+        )
+
+        self.submissions: list[Submission] = []
+        self.title: str
+        self.quiz = quiz
+        self.build_embed()
+
+    def build_embed(self) -> None:
+        self.add_field(
+            name=f"**{self.quiz.prompt_header}**",
+            value=self.quiz.prompt_body,
+            inline=False
+        )
+
+    def has_submitted(self, user: discord.User | discord.Member) -> bool:
+        return any(
+            user == submission.user
+                for submission in self.submissions
+        )
+
+    async def add_submission(self, submission: Submission) -> None:
+        if self.has_submitted(submission.user):
+            raise ValueError("User has already submitted")
+        
+        bisect.insort(self.submissions, submission)
+
+        leaderboard_content = []
+        for rank, submission in enumerate(reversed(self.submissions), 1):
+            minutes, seconds = divmod(int(submission.time_taken.total_seconds()), 60)
+            time_taken_str = f"{minutes:02d}:{seconds:02d}"
+            if submission.success:
+                score_line = f"**{rank}) {submission.user.mention} {time_taken_str} ✅**"
+            else:
+                score_line = f"**_) {submission.user.mention} {time_taken_str} ❌**"
+            leaderboard_content.append(score_line)
+
+        self.description = "\n".join(leaderboard_content)
+
+    async def end_quiz(self) -> None:
+        self.title += " **\\*ENDED\\***"
+        self.add_field(
+            name=f"**{self.quiz.answer_header}**",
+            value=self.quiz.answer_body,
+            inline=False
+        )
+
 
 class QuizOptionButton(discord.ui.Button):
     async def callback(self, interaction: Interaction) -> None:
         assert isinstance(self.view, QuizView)
-        await self.view.answer_callback(interaction, self)
+        await self.view.on_answer(interaction, self)
+
 
 class QuizView(discord.ui.View):
-    def __init__(self, *, interaction: discord.Interaction, quiz, timeout: float | None = 180) -> None:
-        super().__init__(timeout = timeout)
-
-        self.scoreboard: list[tuple[bool, datetime.timedelta, discord.User | discord.Member]] = []
-        self.users_answered: set[discord.User | discord.Member] = set()
+    def __init__(
+        self,
+        *,
+        interaction: Interaction,
+        quiz: Quiz,
+        color: discord.Color | int | None = None,
+        timeout: float = 60
+    ) -> None:
+        super().__init__(timeout=timeout)
+        
         self.interaction = interaction
         self.quiz = quiz
-
-        self.embed = discord.Embed(
-            title = f"Math Quiz (category: {quiz['category']})",
-            color = discord.Color.blue()
-        )
-        self.embed.add_field(
-            name = "**Problem**",
-            value = quiz['problem'],
-            inline = False
-        ) 
-        self.embed.add_field(
-            name = "**Options**",
-            value = "\n".join(
-                f'**{option}) ** {label}'
-                    for option, label in quiz["options"]
-            ),
-            inline = False
+        self.embed = QuizEmbed(
+            quiz=quiz,
+            color=color
         )
 
-        for option, _ in quiz["options"]:
-            button = QuizOptionButton(label = option, custom_id = option)
+        self.build_view()
+    
+    def build_view(self) -> None:
+        for option in self.quiz.options:
+            button = QuizOptionButton(label=option)
             self.add_item(button)
 
     async def send(self) -> None:
-        await self.interaction.response.send_message(embed = self.embed, view = self)
+        await self.interaction.response.send_message(embed=self.embed, view=self)
+
+    async def on_answer(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        message = interaction.message
+        assert message is not None
+
+        if self.embed.has_submitted(interaction.user):
+            await interaction.response.send_message(content="**You have already submitted an answer**", ephemeral=True)
+            return
+
+        submission = Submission(
+            user=interaction.user,
+            answer=button.label or "",
+            success=button.label == self.quiz.answer,
+            time_taken=interaction.created_at - message.created_at
+        )
+
+        await self.embed.add_submission(submission)
+
+        await message.edit(embed = self.embed)
+        await interaction.response.defer()
 
     async def on_timeout(self) -> None:
-        assert self.embed.title is not None
-        self.embed.title += " **\\*ENDED\\***"
-        self.embed.add_field(
-            name = "**Rationale**",
-            value = self.quiz["rationale"],
-            inline = False
-        )
-        await self.interaction.edit_original_response(embed = self.embed, view = None)
-
-    async def answer_callback(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        assert interaction.message is not None
-        
-        time_taken = interaction.created_at - interaction.message.created_at
-
-        if interaction.user in self.users_answered:
-            await interaction.response.defer()
-            return
-        
-        self.users_answered.add(interaction.user)
-
-        bisect.insort(
-            self.scoreboard,
-            (
-                button.custom_id != self.quiz["correct"],
-                time_taken,
-                interaction.user
-            )
-        )
-
-        scoreboard_content = []
-        for index, (failure, time_taken, user) in enumerate(self.scoreboard, 1):
-            minutes_taken = int(time_taken.total_seconds() / 60)
-            formatted_time_taken = f"{minutes_taken:02d}:{time_taken.seconds % 60:02d}"
-            scoreboard_content.append(
-                f"**{[index,'_'][failure]}) {user.mention} {formatted_time_taken} {'✅❌'[failure]}**"
-            )
-
-        self.embed.description = "\n".join(scoreboard_content)
-
-        await interaction.message.edit(embed = self.embed)
-        await interaction.response.defer()
+        await self.embed.end_quiz()
+        await self.interaction.edit_original_response(embed=self.embed, view=None)
