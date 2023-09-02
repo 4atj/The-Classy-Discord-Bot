@@ -144,7 +144,7 @@ class Cog(commands.Cog):
         lines = ["### Top codeguessrs"]
         for rank, (user_id, points) in enumerate(top_players, 1):
             user = await interaction.client.fetch_user(user_id)
-            lines.append(f"{rank}. {user.mention}  {points} points")
+            lines.append(f"{rank}. {user.mention}  {points} {'point' if points in (1, -1) else 'points'}")
         await interaction.response.send_message("\n".join(lines), allowed_mentions=discord.AllowedMentions.none())
 
 
