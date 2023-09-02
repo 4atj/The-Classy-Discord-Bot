@@ -137,9 +137,9 @@ class QuizView(discord.ui.View):
         )
 
         await self.embed.add_submission(submission)
-
-        await message.edit(embed = self.embed)
+        
         await interaction.response.defer()
+        await message.edit(embed = self.embed)
 
     async def on_timeout(self) -> None:
         await self.embed.end_quiz()
