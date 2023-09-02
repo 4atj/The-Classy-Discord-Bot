@@ -137,7 +137,7 @@ class Cog(commands.Cog):
         description = "Show top10 code guessrs"
     )
     async def top10codeguessr(self, interaction: discord.Interaction) -> None:
-        db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr.db")
+        db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr_scores.db")
         db_uri = f"file:{db_rel_path}?mode=ro"
         top_players = codeguessr.leaderboard_top(10, db_uri=db_uri)
 
