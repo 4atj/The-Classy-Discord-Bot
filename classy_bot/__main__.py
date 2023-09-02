@@ -118,14 +118,30 @@ class Cog(commands.Cog):
     )
     async def codeguessr(self, interaction: discord.Interaction) -> None:
         db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr.db")
-        db_uri = f"file:{db_rel_path}?mode=ro"
+        db_uri = f"file:{db_rel_path}"
 
-        await QuizView(
+        quizview = codeguessr.CodeguessrQuizView(
             interaction=interaction,
-            quiz=codeguessr.random_quiz_from_db(db_uri, n_choices = 5),
+            quiz=codeguessr.random_quiz_from_db(f"{db_uri}?mode=ro", n_choices=5),
             color=discord.Color.dark_grey(),
-            timeout=20
-        ).send()
+            timeout=30
+        )
+        quizview.use_leaderboard_db(db_uri)
+        await quizview.send()
+
+    @app_commands.command(
+        description = "Show top10 code guessrs"
+    )
+    async def top10codeguessr(self, interaction: discord.Interaction) -> None:
+        db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr.db")
+        db_uri = f"file:{db_rel_path}?mode=ro"
+        top_players = codeguessr.leaderboard_top(10, db_uri=db_uri)
+
+        lines = ["### Top codeguessrs"]
+        for rank, (user_id, points) in enumerate(top_players, 1):
+            user = await interaction.client.fetch_user(user_id)
+            lines.append(f"{rank}. {user.mention}  {points} points")
+        await interaction.response.send_message("\n".join(lines), allowed_mentions=discord.AllowedMentions.none())
 
 
 class Bot(commands.Bot):

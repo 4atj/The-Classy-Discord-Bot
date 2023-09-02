@@ -6,7 +6,7 @@ import random
 import sqlite3
 from dataclasses import dataclass
 
-from .quiz import Quiz
+from .quiz import QuizView, Quiz, Submission
 
 
 @dataclass(kw_only=True)
@@ -74,3 +74,48 @@ def random_quiz_from_db(db_uri: str, *, n_choices: int) -> Quiz:
         langs=langs_from_db(db_uri),
         n_choices=n_choices
     )
+
+
+class CodeguessrQuizView(QuizView):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.leaderboard_db_uri: str | None = None
+
+    def use_leaderboard_db(self, db_uri: str):
+        self.leaderboard_db_uri = db_uri
+
+    async def on_submission(self, submission: Submission):
+        db_uri = self.leaderboard_db_uri
+        if not db_uri:
+            return
+
+        if submission.success:
+            time_seconds = submission.time_taken.total_seconds()
+            points = max(round(20 - time_seconds), 1)
+        else:
+            points = -20
+
+        with sqlite3.connect(db_uri, uri=True) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS
+                player_scores (discord_user_id INTEGER PRIMARY KEY, points INTEGER)
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO player_scores (discord_user_id, points)
+                VALUES (?, ?)
+                ON CONFLICT (discord_user_id) DO
+                UPDATE SET points = points + ?
+                """,
+                (submission.user.id, points, points)
+            )
+
+
+def leaderboard_top(n_players=5, *, db_uri: str):
+    with sqlite3.connect(db_uri, uri=True) as conn:
+        return conn.execute(
+            "SELECT discord_user_id, points FROM player_scores ORDER BY points DESC LIMIT ?",
+            (n_players,)
+        ).fetchall()

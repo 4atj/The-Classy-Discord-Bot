@@ -32,7 +32,7 @@ class Quiz:
 
 class QuizEmbed(discord.Embed):
     def __init__(
-        self, 
+        self,
         *,
         quiz: Quiz,
         color: discord.Color | int | None = None
@@ -42,7 +42,6 @@ class QuizEmbed(discord.Embed):
             color=color
         )
 
-        self.submissions: list[Submission] = []
         self.title: str
         self.quiz = quiz
         self.build_embed()
@@ -54,28 +53,7 @@ class QuizEmbed(discord.Embed):
             inline=False
         )
 
-    def has_submitted(self, user: discord.User | discord.Member) -> bool:
-        return any(
-            user == submission.user
-                for submission in self.submissions
-        )
-
-    async def add_submission(self, submission: Submission) -> None:
-        if self.has_submitted(submission.user):
-            raise ValueError("User has already submitted")
-        
-        bisect.insort(self.submissions, submission)
-
-        leaderboard_content = []
-        for rank, submission in enumerate(reversed(self.submissions), 1):
-            minutes, seconds = divmod(int(submission.time_taken.total_seconds()), 60)
-            time_taken_str = f"{minutes:02d}:{seconds:02d}"
-            if submission.success:
-                score_line = f"**{rank}) {submission.user.mention} {time_taken_str} ✅**"
-            else:
-                score_line = f"**_) {submission.user.mention} {time_taken_str} ❌**"
-            leaderboard_content.append(score_line)
-
+    def update_leaderboard(self, leaderboard_content: list[str]) -> None:
         self.description = "\n".join(leaderboard_content)
 
     async def end_quiz(self) -> None:
@@ -103,16 +81,17 @@ class QuizView(discord.ui.View):
         timeout: float = 60
     ) -> None:
         super().__init__(timeout=timeout)
-        
+
         self.interaction = interaction
         self.quiz = quiz
         self.embed = QuizEmbed(
             quiz=quiz,
             color=color
         )
+        self.submissions: list[Submission] = []
 
         self.build_view()
-    
+
     def build_view(self) -> None:
         for option in self.quiz.options:
             button = QuizOptionButton(label=option)
@@ -121,11 +100,31 @@ class QuizView(discord.ui.View):
     async def send(self) -> None:
         await self.interaction.response.send_message(embed=self.embed, view=self)
 
+    async def add_submission(self, submission: Submission) -> None:
+        if any(submission.user == s.user for s in self.submissions):
+            raise ValueError("User has already submitted")
+
+        bisect.insort(self.submissions, submission)
+
+        leaderboard_content = []
+        for rank, submission in enumerate(reversed(self.submissions), 1):
+            minutes, seconds = divmod(int(submission.time_taken.total_seconds()), 60)
+            time_taken_str = f"{minutes:02d}:{seconds:02d}"
+            if submission.success:
+                score_line = f"**{rank}) {submission.user.mention} {time_taken_str} ✅**"
+            else:
+                score_line = f"**_) {submission.user.mention} {time_taken_str} ❌**"
+            leaderboard_content.append(score_line)
+        self.embed.update_leaderboard(leaderboard_content)
+
+    async def on_submission(self, submission: Submission) -> None:
+        pass
+
     async def on_answer(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         message = interaction.message
         assert message is not None
 
-        if self.embed.has_submitted(interaction.user):
+        if any(interaction.user == subm.user for subm in self.submissions):
             await interaction.response.send_message(content="**You have already submitted an answer**", ephemeral=True)
             return
 
@@ -136,9 +135,10 @@ class QuizView(discord.ui.View):
             time_taken=interaction.created_at - message.created_at
         )
 
-        await self.embed.add_submission(submission)
+        await self.on_submission(submission)
+        await self.add_submission(submission)
 
-        await message.edit(embed = self.embed)
+        await message.edit(embed=self.embed)
         await interaction.response.defer()
 
     async def on_timeout(self) -> None:
