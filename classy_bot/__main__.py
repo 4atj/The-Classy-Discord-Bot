@@ -123,22 +123,24 @@ class Cog(commands.Cog):
     async def codeguessr(self, interaction: discord.Interaction) -> None:
         db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr.db")
         db_uri = f"file:{db_rel_path}"
-
         quizview = codeguessr.CodeguessrQuizView(
             interaction=interaction,
             quiz=codeguessr.random_quiz_from_db(f"{db_uri}?mode=ro", n_choices=5),
             color=discord.Color.dark_grey(),
             timeout=60
         )
-        quizview.use_leaderboard_db(db_uri)
+
+        scores_db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr_scores.db")
+        scores_db_uri = f"file:{scores_db_rel_path}"
+        quizview.use_leaderboard_db(scores_db_uri)
         await quizview.send()
 
     @app_commands.command(
         description = "Show top10 code guessrs"
     )
     async def top10codeguessr(self, interaction: discord.Interaction) -> None:
-        db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr_scores.db")
-        db_uri = f"file:{db_rel_path}?mode=ro"
+        scores_db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr_scores.db")
+        scores_db_uri = f"file:{scores_db_rel_path}?mode=ro"
         top_players = codeguessr.leaderboard_top(10, db_uri=db_uri)
 
         lines = ["### Top codeguessrs"]
