@@ -141,7 +141,7 @@ class Cog(commands.Cog):
     async def top10codeguessr(self, interaction: discord.Interaction) -> None:
         scores_db_rel_path = utils.resolve_relative_path(__file__, "../data/codeguessr_scores.db")
         scores_db_uri = f"file:{scores_db_rel_path}?mode=ro"
-        top_players = codeguessr.leaderboard_top(10, db_uri=db_uri)
+        top_players = codeguessr.leaderboard_top(10, db_uri=scores_db_uri)
 
         lines = ["### Top codeguessrs"]
         for rank, (user_id, points) in enumerate(top_players, 1):
