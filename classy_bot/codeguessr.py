@@ -14,7 +14,12 @@ import random
 import sqlite3
 from dataclasses import dataclass
 
-from .quiz import QuizView, Quiz, Submission
+import discord
+from discord import Interaction
+
+from .quiz import MultiChoiceQuiz
+from .quiz.submission import MultiChoiceSubmission
+from .quiz.view import MultiChoiceView
 
 
 @dataclass(kw_only=True)
@@ -52,7 +57,7 @@ def langs_from_db(db_uri: str) -> list[str]:
         return [lang for (lang,) in res.fetchall()]
 
 
-def quiz_from_solution(*, solution: Solution, langs: list[str], n_choices: int) -> Quiz:
+def quiz_from_solution(*, solution: Solution, langs: list[str], n_choices: int) -> MultiChoiceQuiz:
     escaped_language = urllib.parse.quote(solution.language)
 
     options = random.sample(langs, k=n_choices)
@@ -62,7 +67,7 @@ def quiz_from_solution(*, solution: Solution, langs: list[str], n_choices: int) 
         i = random.randint(0, n_choices - 1)
         options[i] = solution.language
 
-    return Quiz(
+    return MultiChoiceQuiz(
         title="CodeGuessr (discord edition)",
         prompt_header="What's this programming language?!",
         prompt_body=f"```\n{solution.code}\n```",
@@ -76,7 +81,7 @@ def quiz_from_solution(*, solution: Solution, langs: list[str], n_choices: int) 
     )
 
 
-def random_quiz_from_db(db_uri: str, *, n_choices: int) -> Quiz:
+def random_quiz_from_db(db_uri: str, *, n_choices: int) -> MultiChoiceQuiz:
     return quiz_from_solution(
         solution=random_solution_from_db(db_uri),
         langs=langs_from_db(db_uri),
@@ -84,15 +89,28 @@ def random_quiz_from_db(db_uri: str, *, n_choices: int) -> Quiz:
     )
 
 
-class CodeguessrQuizView(QuizView):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class CodeguessrQuizView(MultiChoiceView):
+    def __init__(
+        self,
+        *,
+        interaction: Interaction,
+        quiz: MultiChoiceQuiz,
+        color: discord.Color | int | None = None,
+        timeout: float = 60
+    ) -> None:
+        super().__init__(
+            interaction=interaction,
+            quiz=quiz,
+            color=color,
+            timeout=timeout
+        )
+
         self.leaderboard_db_uri: str | None = None
 
     def use_leaderboard_db(self, db_uri: str):
         self.leaderboard_db_uri = db_uri
 
-    async def on_submission(self, submission: Submission):
+    async def on_submission(self, submission: MultiChoiceSubmission) -> None:
         db_uri = self.leaderboard_db_uri
         if not db_uri:
             return
@@ -121,7 +139,7 @@ class CodeguessrQuizView(QuizView):
             )
 
 
-def leaderboard_top(n_players=5, *, db_uri: str):
+def leaderboard_top(n_players: int = 5, *, db_uri: str):
     with sqlite3.connect(db_uri, uri=True) as conn:
         return conn.execute(
             "SELECT discord_user_id, points FROM player_scores ORDER BY points DESC LIMIT ?",

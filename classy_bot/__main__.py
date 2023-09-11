@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-__all__ = ("ImagineInferenceSteps", "Bot")
+__all__ = (
+    "Bot",
+)
 
 import os
-import json
-import random
 from typing import Final
 
 import dotenv
@@ -13,19 +13,18 @@ from discord import app_commands
 from discord.ext import commands
 
 from . import utils
-from .quiz import QuizView, Quiz
-from .image_generation import ImageGenerator, NSFWImageGenerationError
+from .quiz.view import MultiChoiceView
+from .math_quiz import random_math_quiz_from_json
 from . import codeguessr
+from .image_generation import ImageGenerator, NSFWImageGenerationError
 
 
-dotenv.load_dotenv(utils.resolve_relative_path(__file__, "../dotenv/.env"))
+dotenv.load_dotenv(utils.resolve_relative_path(__file__, "../dotenv/.env")) # type: ignore
 
 
-ImagineInferenceSteps: Final = app_commands.transformers.RangeTransformer(
-    discord.enums.AppCommandOptionType.integer,
-    min = 5,
-    max = 500
-)
+min_imagine_inference_steps: Final = 5
+default_imagine_inference_steps: Final = 50
+max_imagine_inferecen_steps: Final = 500
 
 
 class Cog(commands.Cog):
@@ -38,8 +37,7 @@ class Cog(commands.Cog):
     )
     async def hello(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message('Hello')
-
-    default_imagine_inference_steps: Final = 50
+    
     @app_commands.command(
         description="Turns your prompts into art"
     )
@@ -48,8 +46,8 @@ class Cog(commands.Cog):
         negative_prompt="Describe elements you want to avoid in the image",
         inference_steps=
             "The more steps, the higher the quality "
-            f"(min: {ImagineInferenceSteps.min_value}, "
-            f"max: {ImagineInferenceSteps.max_value}, "
+            f"(min: {min_imagine_inference_steps}, "
+            f"max: {max_imagine_inferecen_steps}, "
             f"default: {default_imagine_inference_steps})"
     )
     async def imagine(
@@ -57,7 +55,7 @@ class Cog(commands.Cog):
         interaction: discord.Interaction,
         prompt: str,
         negative_prompt: str = "",
-        inference_steps: ImagineInferenceSteps = default_imagine_inference_steps # type: ignore
+        inference_steps: app_commands.Range[int, min_imagine_inference_steps, max_imagine_inferecen_steps] = default_imagine_inference_steps
     ) -> None:
         
         await interaction.response.defer(thinking = True)
@@ -91,26 +89,9 @@ class Cog(commands.Cog):
         description="Solve a short math question"
     )
     async def math_quiz(self, interaction: discord.Interaction) -> None:
-        with open(utils.resolve_relative_path(__file__, "../data/math_qa.json")) as f:
-            quizzes = json.load(f)
+        quiz = random_math_quiz_from_json(utils.resolve_relative_path(__file__, "../data/math_qa.json"))
 
-        quiz = random.choice(quizzes)
-        del quizzes
-
-        _, options = zip(*quiz["options"])
-        answer = options[ord(quiz["correct"])-ord("A")]
-
-        quiz = Quiz(
-            title="Math Quiz",
-            prompt_header="Problem",
-            prompt_body=quiz["problem"],
-            answer_header="Rationale",
-            answer_body=quiz["rationale"],
-            options=options,
-            answer=answer
-        )
-
-        await QuizView(
+        await MultiChoiceView(
             interaction=interaction,
             quiz=quiz,
             color=discord.Color.blue(),
@@ -148,7 +129,6 @@ class Cog(commands.Cog):
             user = await interaction.client.fetch_user(user_id)
             lines.append(f"{rank}. {user.mention}  {points} {'point' if points in (1, -1) else 'points'}")
         await interaction.response.send_message("\n".join(lines), allowed_mentions=discord.AllowedMentions.none())
-
 
 
 class Bot(commands.Bot):
