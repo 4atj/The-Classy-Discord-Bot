@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __all__ = (
     "Bot",
+    "ImagineInferenceSteps"
 )
 
 import os
@@ -22,9 +23,11 @@ from .image_generation import ImageGenerator, NSFWImageGenerationError
 dotenv.load_dotenv(utils.resolve_relative_path(__file__, "../dotenv/.env")) # type: ignore
 
 
-min_imagine_inference_steps: Final = 5
-default_imagine_inference_steps: Final = 50
-max_imagine_inferecen_steps: Final = 500
+ImagineInferenceSteps: Final = app_commands.transformers.RangeTransformer(
+    discord.enums.AppCommandOptionType.integer,
+    min = 5,
+    max = 500
+)
 
 
 class Cog(commands.Cog):
@@ -37,7 +40,8 @@ class Cog(commands.Cog):
     )
     async def hello(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message('Hello')
-    
+
+    default_imagine_inference_steps: Final = 50
     @app_commands.command(
         description="Turns your prompts into art"
     )
@@ -46,8 +50,8 @@ class Cog(commands.Cog):
         negative_prompt="Describe elements you want to avoid in the image",
         inference_steps=
             "The more steps, the higher the quality "
-            f"(min: {min_imagine_inference_steps}, "
-            f"max: {max_imagine_inferecen_steps}, "
+            f"(min: {ImagineInferenceSteps.min_value}, "
+            f"max: {ImagineInferenceSteps.max_value}, "
             f"default: {default_imagine_inference_steps})"
     )
     async def imagine(
@@ -55,7 +59,7 @@ class Cog(commands.Cog):
         interaction: discord.Interaction,
         prompt: str,
         negative_prompt: str = "",
-        inference_steps: app_commands.Range[int, min_imagine_inference_steps, max_imagine_inferecen_steps] = default_imagine_inference_steps
+        inference_steps: ImagineInferenceSteps = default_imagine_inference_steps # type: ignore
     ) -> None:
         
         await interaction.response.defer(thinking = True)
